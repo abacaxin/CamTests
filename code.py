@@ -1,26 +1,47 @@
 import cv2
 import numpy as np
+import pygame
 
-categorias = ['cardboard', 'glass', 'metal', 'paper', 'plastic', 'trash']
-modelo = cv2.dnn.readNetFromONNX('modelo.onnx')
-cap = cv2.VideoCapture(0)
+pygame.init()
+screen = pygame.display.set_mode((640, 480))
+pygame.display.set_caption("Classificacao de Residuos")
+
+modelo = cv2.dnn.readNetFromONNX("modelo.onnx")
+categorias = ['cardboard', 'glass', 'metal', 'paper', 'plastic']
+
+cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
 cap.set(cv2.CAP_PROP_FPS, 10)
-try: 
-    while True:
-        ret, frame = cap.read()
-        
-        if not ret: exit()
-        blob = cv2.dnn.blobFromImage(frame, 1/255.0, (224, 224), swapRB=True, crop=False)
-        modelo.setInput(blob)
-        saida = modelo.forward()
-        indice = np.argmax(saida[0])
-    
-        cv2.putText(frame, f"{categorias[indice]} ({saida[0][indice]:.1%})", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        cv2.imshow('Classificação de Resíduos', frame)
-    
-        if cv2.waitKey(1) == 27:
-            break
 
-finally:
-    cap.release()   
-    cv2.destroyAllWindows()
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_q:
+            running = False
+
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    blob = cv2.dnn.blobFromImage(frame, 1/255.0, (224,224), swapRB=True)
+    modelo.setInput(blob)
+    saida = modelo.forward()
+    indice = np.argmax(saida)
+    confianca = saida[0][indice] * 100
+
+    # Converte frame BGR → RGB pra pygame
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    frame_rgb = cv2.resize(frame_rgb, (640, 480))
+
+    # Escreve texto
+    cv2.putText(frame_rgb, f"{categorias[indice]}: {confianca:.1f}%",
+                (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+    # Mostra no pygame
+    surface = pygame.surfarray.make_surface(frame_rgb.transpose(1, 0, 2))
+    screen.blit(surface, (0, 0))
+    pygame.display.flip()
+
+cap.release()
+pygame.quit()
